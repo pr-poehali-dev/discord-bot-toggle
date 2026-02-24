@@ -101,8 +101,12 @@ export default function Index() {
         setAddError(data.error || "Неверный токен");
       } else {
         setNewToken("");
-        addLog("success", `Бот «${data.bot.name}» добавлен, команды зарегистрированы`);
-        loadBots(); // без await — не блокируем UI
+        const urlOk = data.interactions_url?.ok;
+        const cmdOk = data.commands?.every((c: {ok: boolean}) => c.ok);
+        addLog("success", `Бот «${data.bot.name}» добавлен`);
+        addLog(urlOk ? "success" : "error", urlOk ? "Interactions URL установлен" : `Ошибка URL: ${JSON.stringify(data.interactions_url?.error)}`);
+        addLog(cmdOk ? "success" : "warn", cmdOk ? "Команды зарегистрированы" : `Ошибка команд: ${JSON.stringify(data.commands)}`);
+        loadBots();
       }
     } catch {
       setAddError("Ошибка подключения");

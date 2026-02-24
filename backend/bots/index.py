@@ -44,7 +44,7 @@ def fetch_bot_info(token: str) -> dict:
 INTERACTIONS_URL = "https://functions.poehali.dev/a732a48b-2887-4612-a2e4-37497a35d07e"
 
 
-def set_interactions_url(token: str) -> bool:
+def set_interactions_url(token: str) -> dict:
     """Программно устанавливает Interactions Endpoint URL через Discord API."""
     req = urllib.request.Request(
         "https://discord.com/api/v10/applications/@me",
@@ -53,11 +53,17 @@ def set_interactions_url(token: str) -> bool:
         method="PATCH",
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return resp.status == 200
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.loads(resp.read())
+            print(f"[set_interactions_url] OK: {body.get('interactions_endpoint_url')}")
+            return {"ok": True}
+    except urllib.error.HTTPError as e:
+        err = e.read().decode()
+        print(f"[set_interactions_url] HTTPError {e.code}: {err}")
+        return {"ok": False, "error": err}
     except Exception as e:
-        print(f"[set_interactions_url] {e}")
-        return False
+        print(f"[set_interactions_url] Exception: {e}")
+        return {"ok": False, "error": str(e)}
 
 
 def register_commands(token: str, app_id: str) -> list:
@@ -148,9 +154,9 @@ def handler(event: dict, context) -> dict:
             conn.close()
 
             # Авто-установка Interactions URL + регистрация команд
-            url_set = set_interactions_url(token)
+            url_result = set_interactions_url(token)
             cmd_results = register_commands(token, info["app_id"])
-            print(f"[add_bot] interactions_url_set={url_set} commands={cmd_results}")
+            print(f"[add_bot] url_result={url_result} commands={cmd_results}")
 
             return {
                 "statusCode": 200,
@@ -158,7 +164,7 @@ def handler(event: dict, context) -> dict:
                 "body": json.dumps({
                     "ok": True,
                     "bot": {"id": bot_id, "name": info["name"], "app_id": info["app_id"]},
-                    "interactions_url_set": url_set,
+                    "interactions_url": url_result,
                     "commands": cmd_results,
                 }),
             }
