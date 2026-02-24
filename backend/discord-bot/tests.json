@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "GET /status — получить статус бота",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "OPTIONS — CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}
