@@ -92,7 +92,9 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
     method = event.get("httpMethod", "GET")
-    path = (event.get("path") or "/").rstrip("/")
+    raw_path = event.get("path") or "/"
+    path = raw_path.rstrip("/")
+    print(f"[handler] method={method} path={path!r}")
 
     # GET — список ботов
     if method == "GET":
