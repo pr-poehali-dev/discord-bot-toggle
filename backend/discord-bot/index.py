@@ -1,5 +1,5 @@
 """
-Discord бот на основе Interactions Webhook.
+Discord бот на основе Interactions Webhook. v2
 Slash-команда /ку → "Привет!"
 Discord сам присылает запросы на этот endpoint — постоянное соединение не нужно.
 """
