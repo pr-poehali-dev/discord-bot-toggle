@@ -129,7 +129,6 @@ def handler(event: dict, context) -> dict:
             cur.execute("SELECT id FROM bots WHERE app_id = %s", (info["app_id"],))
             existing = cur.fetchone()
             if existing:
-                # Обновляем токен
                 cur.execute("UPDATE bots SET token=%s, public_key=%s, updated_at=NOW() WHERE id=%s",
                             (token, info["public_key"], existing[0]))
                 bot_id = existing[0]
@@ -140,6 +139,10 @@ def handler(event: dict, context) -> dict:
                 )
                 bot_id = cur.fetchone()[0]
 
+            # Сразу активируем в БД — ДО set_interactions_url,
+            # т.к. Discord сразу шлёт PING на наш webhook при установке URL
+            cur.execute("UPDATE bots SET is_active=FALSE")
+            cur.execute("UPDATE bots SET is_active=TRUE, updated_at=NOW() WHERE id=%s", (bot_id,))
             conn.commit()
             cur.close()
             conn.close()
@@ -169,9 +172,16 @@ def handler(event: dict, context) -> dict:
             cur = conn.cursor()
             cur.execute("UPDATE bots SET is_active=FALSE")
             cur.execute("UPDATE bots SET is_active=TRUE, updated_at=NOW() WHERE id=%s", (bot_id,))
+            # Получаем токен активированного бота
+            cur.execute("SELECT token, app_id FROM bots WHERE id=%s", (bot_id,))
+            row = cur.fetchone()
             conn.commit()
             cur.close()
             conn.close()
+            # Переустанавливаем interactions URL и команды
+            if row:
+                set_interactions_url(row[0])
+                register_commands(row[0], row[1])
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
         # Деактивировать бота
