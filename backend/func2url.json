@@ -1,4 +1,5 @@
 {
+  "bots": "https://functions.poehali.dev/e11f756f-1620-4383-897b-d2810661c365",
   "bot-settings": "https://functions.poehali.dev/d8f68ff6-0557-4d53-80c0-55c6ae8278ee",
   "register-commands": "https://functions.poehali.dev/91266527-c06b-488f-9f43-224096af875d",
   "discord-bot": "https://functions.poehali.dev/a732a48b-2887-4612-a2e4-37497a35d07e"

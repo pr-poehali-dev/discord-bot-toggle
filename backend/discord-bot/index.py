@@ -1,7 +1,7 @@
 """
-Discord бот на основе Interactions Webhook. v3
+Discord Interactions Webhook. v4
+Читает активного бота из таблицы bots.
 Slash-команда /ku → "Привет!"
-Public key читается из БД (bot_settings).
 """
 
 import os
@@ -15,14 +15,16 @@ CORS = {
 }
 
 
-def get_settings():
+def get_active_bot():
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
     cur = conn.cursor()
-    cur.execute("SELECT key, value FROM bot_settings WHERE key IN ('bot_token', 'app_id', 'public_key')")
-    rows = {r[0]: r[1] for r in cur.fetchall()}
+    cur.execute("SELECT token, app_id, public_key, name FROM bots WHERE is_active=TRUE LIMIT 1")
+    row = cur.fetchone()
     cur.close()
     conn.close()
-    return rows
+    if not row:
+        return None
+    return {"token": row[0], "app_id": row[1], "public_key": row[2], "name": row[3]}
 
 
 def verify_discord_signature(public_key: str, signature: str, timestamp: str, body: str) -> bool:
@@ -35,12 +37,12 @@ def verify_discord_signature(public_key: str, signature: str, timestamp: str, bo
     except BadSignatureError:
         return False
     except Exception as e:
-        print(f"[verify] exception: {e}")
+        print(f"[verify] {e}")
         return False
 
 
 def handler(event: dict, context) -> dict:
-    """Обработчик Discord Interactions — читает настройки из БД, отвечает на slash-команды."""
+    """Обработчик Discord Interactions — работает с активным ботом из БД."""
 
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
@@ -50,36 +52,33 @@ def handler(event: dict, context) -> dict:
     headers = {k.lower(): v for k, v in raw_headers.items()}
     body_str = event.get("body") or ""
 
-    settings = get_settings()
+    bot = get_active_bot()
 
     if method == "GET":
         return {
             "statusCode": 200,
             "headers": CORS,
             "body": json.dumps({
-                "status": "online",
-                "running": True,
-                "token_set": bool(settings.get("bot_token")),
-                "app_id_set": bool(settings.get("app_id")),
-                "public_key_set": bool(settings.get("public_key")),
+                "status": "online" if bot else "no_active_bot",
+                "bot_name": bot["name"] if bot else None,
+                "app_id": bot["app_id"] if bot else None,
             }),
         }
 
     if method == "POST":
-        public_key = settings.get("public_key", "").strip()
+        if not bot:
+            return {"statusCode": 503, "headers": CORS, "body": json.dumps({"error": "Нет активного бота"})}
+
+        public_key = bot["public_key"].strip()
         sig = headers.get("x-signature-ed25519", "")
         ts = headers.get("x-signature-timestamp", "")
 
-        print(f"[handler] public_key_set={bool(public_key)} sig={'OK' if sig else 'EMPTY'} ts={'OK' if ts else 'EMPTY'}")
-
         if not public_key:
-            return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Public key not configured"})}
-
+            return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Public key not set"})}
         if not sig or not ts:
-            return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Missing signature headers"})}
-
+            return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Missing signature"})}
         if not verify_discord_signature(public_key, sig, ts, body_str):
-            print("[handler] Неверная подпись")
+            print("[handler] Invalid signature")
             return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Invalid signature"})}
 
         try:
@@ -88,9 +87,7 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Bad JSON"})}
 
         interaction_type = data.get("type")
-        print(f"[handler] interaction_type={interaction_type}")
 
-        # PING
         if interaction_type == 1:
             return {
                 "statusCode": 200,
@@ -98,10 +95,9 @@ def handler(event: dict, context) -> dict:
                 "body": json.dumps({"type": 1}),
             }
 
-        # Slash команда
         if interaction_type == 2:
             cmd_name = data.get("data", {}).get("name", "")
-            print(f"[handler] команда: {cmd_name}")
+            print(f"[handler] cmd={cmd_name} bot={bot['name']}")
             if cmd_name == "ku":
                 return {
                     "statusCode": 200,
