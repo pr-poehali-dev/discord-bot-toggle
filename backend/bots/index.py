@@ -41,6 +41,25 @@ def fetch_bot_info(token: str) -> dict:
         }
 
 
+INTERACTIONS_URL = "https://functions.poehali.dev/a732a48b-2887-4612-a2e4-37497a35d07e"
+
+
+def set_interactions_url(token: str) -> bool:
+    """Программно устанавливает Interactions Endpoint URL через Discord API."""
+    req = urllib.request.Request(
+        "https://discord.com/api/v10/applications/@me",
+        data=json.dumps({"interactions_endpoint_url": INTERACTIONS_URL}).encode(),
+        headers={"Authorization": f"Bot {token}", "Content-Type": "application/json"},
+        method="PATCH",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status == 200
+    except Exception as e:
+        print(f"[set_interactions_url] {e}")
+        return False
+
+
 def register_commands(token: str, app_id: str) -> list:
     url = f"https://discord.com/api/v10/applications/{app_id}/commands"
     results = []
@@ -122,8 +141,10 @@ def handler(event: dict, context) -> dict:
             cur.close()
             conn.close()
 
-            # Авто-регистрация команд
+            # Авто-установка Interactions URL + регистрация команд
+            url_set = set_interactions_url(token)
             cmd_results = register_commands(token, info["app_id"])
+            print(f"[add_bot] interactions_url_set={url_set} commands={cmd_results}")
 
             return {
                 "statusCode": 200,
@@ -131,6 +152,7 @@ def handler(event: dict, context) -> dict:
                 "body": json.dumps({
                     "ok": True,
                     "bot": {"id": bot_id, "name": info["name"], "app_id": info["app_id"]},
+                    "interactions_url_set": url_set,
                     "commands": cmd_results,
                 }),
             }

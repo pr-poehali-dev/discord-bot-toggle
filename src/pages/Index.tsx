@@ -4,7 +4,6 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 
 const BOTS_API = "https://functions.poehali.dev/e11f756f-1620-4383-897b-d2810661c365";
-const INTERACTIONS_URL = "https://functions.poehali.dev/a732a48b-2887-4612-a2e4-37497a35d07e";
 
 type Tab = "dashboard" | "bots" | "commands" | "logs" | "settings";
 
@@ -54,7 +53,6 @@ export default function Index() {
   const [addError, setAddError] = useState("");
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [copied, setCopied] = useState(false);
 
   // Команды
   const [commands, setCommands] = useState(COMMANDS_LIST);
@@ -142,12 +140,6 @@ export default function Index() {
       addLog("error", "Ошибка удаления бота");
     }
     setDeletingId(null);
-  };
-
-  const copyUrl = () => {
-    navigator.clipboard.writeText(INTERACTIONS_URL);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const toggleCommand = (i: number) => {
@@ -358,16 +350,12 @@ export default function Index() {
                 </div>
               )}
 
-              {/* Interactions URL */}
-              <div className="border border-border rounded-xl bg-card p-4 space-y-2">
-                <p className="text-xs text-muted-foreground font-medium">Interactions Endpoint URL (вставь в Discord Developer Portal)</p>
-                <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-3 py-2">
-                  <code className="text-xs flex-1 truncate">{INTERACTIONS_URL}</code>
-                  <button onClick={copyUrl} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-                    <Icon name={copied ? "Check" : "Copy"} size={13} className={copied ? "text-emerald-400" : ""} />
-                  </button>
-                </div>
-              </div>
+              {/* Подсказка */}
+              {bots.length > 0 && (
+                <p className="text-xs text-muted-foreground text-center">
+                  При добавлении бота все настройки применяются автоматически
+                </p>
+              )}
             </div>
           )}
 
