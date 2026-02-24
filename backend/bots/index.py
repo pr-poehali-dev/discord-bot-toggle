@@ -114,10 +114,13 @@ def handler(event: dict, context) -> dict:
 
             try:
                 info = fetch_bot_info(token)
-            except urllib.error.HTTPError:
-                return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Неверный токен"})}
+            except urllib.error.HTTPError as e:
+                err_body = e.read().decode()
+                print(f"[add_bot] HTTPError {e.code}: {err_body}")
+                return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": f"Discord API: {e.code} — {err_body}"})}
             except Exception as e:
-                return {"statusCode": 500, "headers": CORS, "body": json.dumps({"error": str(e)})}
+                print(f"[add_bot] Exception: {type(e).__name__}: {e}")
+                return {"statusCode": 500, "headers": CORS, "body": json.dumps({"error": f"{type(e).__name__}: {e}"})}
 
             conn = get_conn()
             cur = conn.cursor()

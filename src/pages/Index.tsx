@@ -47,7 +47,7 @@ export default function Index() {
 
   // Боты
   const [bots, setBots] = useState<Bot[]>([]);
-  const [botsLoading, setBotsLoading] = useState(false);
+  const [botsLoading, setBotsLoading] = useState(true);
   const [newToken, setNewToken] = useState("");
   const [addingBot, setAddingBot] = useState(false);
   const [addError, setAddError] = useState("");
@@ -86,22 +86,23 @@ export default function Index() {
   const activeBot = bots.find(b => b.is_active) ?? null;
 
   const addBot = async () => {
-    if (!newToken.trim()) return;
+    const token = newToken.trim().replace(/\s+/g, "");
+    if (!token) return;
     setAddingBot(true);
     setAddError("");
     try {
       const res = await fetch(BOTS_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: newToken.trim() }),
+        body: JSON.stringify({ token }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
         setAddError(data.error || "Неверный токен");
       } else {
         setNewToken("");
-        addLog("success", `Бот «${data.bot.name}» добавлен и команды зарегистрированы`);
-        await loadBots();
+        addLog("success", `Бот «${data.bot.name}» добавлен, команды зарегистрированы`);
+        loadBots(); // без await — не блокируем UI
       }
     } catch {
       setAddError("Ошибка подключения");
@@ -111,6 +112,11 @@ export default function Index() {
 
   const toggleBot = async (bot: Bot) => {
     setTogglingId(bot.id);
+    // Оптимистичное обновление — сразу меняем UI
+    setBots(prev => prev.map(b =>
+      b.id === bot.id ? { ...b, is_active: !b.is_active } :
+      !bot.is_active ? { ...b, is_active: false } : b
+    ));
     const endpoint = bot.is_active ? "/deactivate" : "/activate";
     try {
       await fetch(BOTS_API + endpoint, {
@@ -119,15 +125,17 @@ export default function Index() {
         body: JSON.stringify({ id: bot.id }),
       });
       addLog(bot.is_active ? "warn" : "success", `Бот «${bot.name}» ${bot.is_active ? "остановлен" : "запущен"}`);
-      await loadBots();
     } catch {
       addLog("error", "Ошибка переключения бота");
+      loadBots(); // откатываем при ошибке
     }
     setTogglingId(null);
   };
 
   const deleteBot = async (bot: Bot) => {
     setDeletingId(bot.id);
+    // Оптимистичное удаление
+    setBots(prev => prev.filter(b => b.id !== bot.id));
     try {
       await fetch(BOTS_API + "/delete", {
         method: "POST",
@@ -135,9 +143,9 @@ export default function Index() {
         body: JSON.stringify({ id: bot.id }),
       });
       addLog("warn", `Бот «${bot.name}» удалён`);
-      await loadBots();
     } catch {
       addLog("error", "Ошибка удаления бота");
+      loadBots(); // откатываем при ошибке
     }
     setDeletingId(null);
   };
