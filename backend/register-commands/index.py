@@ -28,7 +28,9 @@ def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
-    token = os.environ.get("DISCORD_BOT_TOKEN", "")
+    raw_token = os.environ.get("DISCORD_BOT_TOKEN", "")
+    # Если в секрет попало описание — берём последнее слово (сам токен)
+    token = raw_token.strip().split()[-1] if raw_token.strip() else ""
     app_id = os.environ.get("DISCORD_APP_ID", "") or "1475679383401529617"
 
     if not token or not app_id:

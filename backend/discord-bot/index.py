@@ -58,7 +58,8 @@ def handler(event: dict, context) -> dict:
         }
 
     if method == "POST":
-        public_key = os.environ.get("DISCORD_PUBLIC_KEY", "")
+        raw_pk = os.environ.get("DISCORD_PUBLIC_KEY", "")
+        public_key = raw_pk.strip().split()[-1] if raw_pk.strip() else ""
 
         sig = headers.get("x-signature-ed25519", "")
         ts = headers.get("x-signature-timestamp", "")
