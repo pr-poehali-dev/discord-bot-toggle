@@ -46,11 +46,10 @@ export default function Index() {
 
   // Настройки бота
   const [botToken, setBotToken] = useState("");
-  const [appId, setAppId] = useState("");
-  const [publicKey, setPublicKey] = useState("");
-  const [savedInfo, setSavedInfo] = useState<{bot_token_set?: boolean; bot_token_preview?: string; app_id?: string; public_key?: string} | null>(null);
+  const [savedInfo, setSavedInfo] = useState<{bot_token_set?: boolean; bot_token_preview?: string; app_id?: string; public_key?: string; bot_name?: string} | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsError, setSettingsError] = useState("");
   const [registering, setRegistering] = useState(false);
   const [registerResult, setRegisterResult] = useState<string>("");
 
@@ -62,26 +61,30 @@ export default function Index() {
   }, []);
 
   const saveSettings = async () => {
+    if (!botToken.trim()) return;
     setSettingsSaving(true);
     setSettingsSaved(false);
-    const body: Record<string, string> = {};
-    if (botToken.trim()) body.bot_token = botToken.trim();
-    if (appId.trim()) body.app_id = appId.trim();
-    if (publicKey.trim()) body.public_key = publicKey.trim();
+    setSettingsError("");
     try {
-      await fetch(SETTINGS_API, {
+      const res = await fetch(SETTINGS_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ bot_token: botToken.trim() }),
       });
-      const data = await fetch(SETTINGS_API).then(r => r.json());
-      setSavedInfo(data);
-      setBotToken(""); setAppId(""); setPublicKey("");
-      setSettingsSaved(true);
-      addLog("success", "Настройки бота сохранены");
-      setTimeout(() => setSettingsSaved(false), 3000);
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setSettingsError(data.error || "Неверный токен");
+        addLog("error", "Ошибка: " + (data.error || "Неверный токен"));
+      } else {
+        const fresh = await fetch(SETTINGS_API).then(r => r.json());
+        setSavedInfo(fresh);
+        setBotToken("");
+        setSettingsSaved(true);
+        addLog("success", `Бот «${data.bot_name}» подключён`);
+        setTimeout(() => setSettingsSaved(false), 4000);
+      }
     } catch {
-      addLog("error", "Ошибка сохранения настроек");
+      setSettingsError("Ошибка подключения");
     }
     setSettingsSaving(false);
   };
@@ -409,83 +412,94 @@ export default function Index() {
 
           {/* Settings */}
           {tab === "settings" && (
-            <div className="animate-fade-in space-y-6">
+            <div className="animate-fade-in space-y-5">
               <div>
                 <h1 className="text-xl font-semibold">Настройки</h1>
                 <p className="text-sm text-muted-foreground mt-1">Подключи своего Discord бота</p>
               </div>
 
-              {/* Токен бота */}
+              {/* Текущий бот */}
+              {savedInfo?.bot_token_set && (
+                <div className="border border-emerald-500/20 bg-emerald-500/5 rounded-xl p-4 flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse-soft shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">
+                      {savedInfo.bot_name ? `Бот «${savedInfo.bot_name}» подключён` : "Бот подключён"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      App ID: {savedInfo.app_id} · Токен: {savedInfo.bot_token_preview}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Форма — только токен */}
               <div className="border border-border rounded-xl bg-card p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Данные бота</p>
-                  {savedInfo?.bot_token_set && (
-                    <span className="text-xs text-emerald-500 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      Токен установлен {savedInfo.bot_token_preview}
-                    </span>
-                  )}
+                <div>
+                  <p className="text-sm font-medium">
+                    {savedInfo?.bot_token_set ? "Сменить бота" : "Подключить бота"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Вставь Bot Token — всё остальное настроится автоматически
+                  </p>
                 </div>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Bot Token</label>
-                    <input
-                      type="password"
-                      value={botToken}
-                      onChange={e => setBotToken(e.target.value)}
-                      placeholder="MTQ3NT..."
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#5865F2]/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Application ID</label>
-                    <input
-                      type="text"
-                      value={appId}
-                      onChange={e => setAppId(e.target.value)}
-                      placeholder={savedInfo?.app_id || "1475679..."}
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#5865F2]/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Public Key</label>
-                    <input
-                      type="text"
-                      value={publicKey}
-                      onChange={e => setPublicKey(e.target.value)}
-                      placeholder={savedInfo?.public_key ? savedInfo.public_key.slice(0, 16) + "..." : "a3f8c2d1..."}
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#5865F2]/40"
-                    />
-                  </div>
-                </div>
+                <input
+                  type="password"
+                  value={botToken}
+                  onChange={e => { setBotToken(e.target.value); setSettingsError(""); }}
+                  onKeyDown={e => e.key === "Enter" && saveSettings()}
+                  placeholder="Вставь Bot Token сюда..."
+                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#5865F2]/40"
+                />
+                {settingsError && (
+                  <p className="text-xs text-red-400">{settingsError}</p>
+                )}
                 <button
                   onClick={saveSettings}
-                  disabled={settingsSaving || (!botToken && !appId && !publicKey)}
+                  disabled={settingsSaving || !botToken.trim()}
                   className="w-full py-2.5 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-medium transition-all disabled:opacity-50"
                 >
-                  {settingsSaving ? "Сохраняю..." : settingsSaved ? "✓ Сохранено!" : "Сохранить"}
+                  {settingsSaving ? "Подключаю..." : settingsSaved ? "✓ Подключено!" : "Подключить"}
                 </button>
               </div>
 
-              {/* Регистрация команд */}
-              <div className="border border-border rounded-xl bg-card p-5 space-y-3">
-                <div>
-                  <p className="text-sm font-medium">Регистрация slash-команд</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">После смены бота — нажми чтобы зарегистрировать /ku</p>
+              {/* Регистрация команд + Interactions URL */}
+              {savedInfo?.bot_token_set && (
+                <div className="border border-border rounded-xl bg-card p-5 space-y-4">
+                  <div>
+                    <p className="text-sm font-medium">Последний шаг</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Один раз укажи этот URL в Discord Developer Portal → Interactions Endpoint URL
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+                    <code className="text-xs flex-1 truncate text-foreground">
+                      https://functions.poehali.dev/a732a48b-2887-4612-a2e4-37497a35d07e
+                    </code>
+                    <button
+                      onClick={() => navigator.clipboard.writeText("https://functions.poehali.dev/a732a48b-2887-4612-a2e4-37497a35d07e")}
+                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Icon name="Copy" size={14} />
+                    </button>
+                  </div>
+                  <div className="border-t border-border pt-4">
+                    <p className="text-xs text-muted-foreground mb-3">После сохранения URL — зарегистрируй команды:</p>
+                    <button
+                      onClick={registerCommands}
+                      disabled={registering}
+                      className="w-full py-2.5 rounded-lg border border-border hover:bg-accent text-sm font-medium transition-all disabled:opacity-50"
+                    >
+                      {registering ? "Регистрирую..." : "Зарегистрировать /ku"}
+                    </button>
+                    {registerResult && (
+                      <p className={`text-xs mt-2 ${registerResult.startsWith("✓") ? "text-emerald-500" : "text-red-400"}`}>
+                        {registerResult}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={registerCommands}
-                  disabled={registering || !savedInfo?.bot_token_set}
-                  className="w-full py-2.5 rounded-lg border border-border hover:bg-accent text-sm font-medium transition-all disabled:opacity-50"
-                >
-                  {registering ? "Регистрирую..." : "Зарегистрировать команды"}
-                </button>
-                {registerResult && (
-                  <p className={`text-xs ${registerResult.startsWith("✓") ? "text-emerald-500" : "text-red-400"}`}>
-                    {registerResult}
-                  </p>
-                )}
-              </div>
+              )}
 
               {/* Тема */}
               <div className="border border-border rounded-xl bg-card divide-y divide-border overflow-hidden">
@@ -496,18 +510,6 @@ export default function Index() {
                   </div>
                   <Switch checked={dark} onCheckedChange={setDark} />
                 </div>
-              </div>
-
-              {/* Инструкция */}
-              <div className="border border-border rounded-xl bg-card p-5 space-y-2">
-                <p className="text-sm font-medium">Как подключить нового бота</p>
-                <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
-                  <li>Создай бота на discord.com/developers/applications</li>
-                  <li>Скопируй Bot Token, Application ID и Public Key</li>
-                  <li>Вставь их выше и нажми «Сохранить»</li>
-                  <li>Укажи Interactions URL: <span className="font-mono text-foreground">functions.poehali.dev/a732a48b...</span></li>
-                  <li>Нажми «Зарегистрировать команды»</li>
-                </ol>
               </div>
             </div>
           )}
