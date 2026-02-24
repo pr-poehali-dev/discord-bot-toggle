@@ -1,122 +1,106 @@
 """
-Discord бот — обрабатывает команды и управляет статусом бота.
-Команды: !ку → "Привет!"
+Discord бот на основе Interactions Webhook.
+Slash-команда /ку → "Привет!"
+Discord сам присылает запросы на этот endpoint — постоянное соединение не нужно.
 """
 
 import os
 import json
-import threading
-import discord
-
-# Глобальный клиент бота и поток
-_bot_client = None
-_bot_thread = None
-_bot_running = False
-
+import hashlib
+import hmac
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Signature-Ed25519, X-Signature-Timestamp",
 }
 
 
-def create_client():
-    intents = discord.Intents.default()
-    intents.message_content = True
-    client = discord.Client(intents=intents)
-
-    @client.event
-    async def on_ready():
-        print(f"Бот запущен как {client.user}")
-
-    @client.event
-    async def on_message(message):
-        if message.author == client.user:
-            return
-        if message.content.lower() == "!ку":
-            await message.channel.send("Привет!")
-
-    return client
+def verify_discord_signature(public_key: str, signature: str, timestamp: str, body: str) -> bool:
+    from nacl.signing import VerifyKey
+    from nacl.exceptions import BadSignatureError
+    try:
+        vk = VerifyKey(bytes.fromhex(public_key))
+        vk.verify((timestamp + body).encode(), bytes.fromhex(signature))
+        return True
+    except BadSignatureError:
+        return False
+    except Exception:
+        return False
 
 
 def handler(event: dict, context) -> dict:
-    """Управление Discord ботом: включение, выключение, статус."""
-    global _bot_client, _bot_thread, _bot_running
+    """Обработчик Discord Interactions — отвечает на slash-команды без постоянного подключения."""
 
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
     method = event.get("httpMethod", "GET")
-    path = event.get("path", "/")
+    headers = event.get("headers", {})
+    body_str = event.get("body") or ""
 
-    token = os.environ.get("DISCORD_BOT_TOKEN", "")
-
-    # GET /status
+    # GET — статус
     if method == "GET":
+        public_key = os.environ.get("DISCORD_PUBLIC_KEY", "")
+        app_id = os.environ.get("DISCORD_APP_ID", "")
         return {
             "statusCode": 200,
             "headers": CORS,
             "body": json.dumps({
-                "running": _bot_running,
-                "status": "online" if _bot_running else "offline",
+                "status": "online",
+                "running": True,
+                "app_id": app_id[:8] + "..." if app_id else "не настроен",
+                "public_key_set": bool(public_key),
             }),
         }
 
-    # POST /start или /stop
     if method == "POST":
-        body = {}
+        public_key = os.environ.get("DISCORD_PUBLIC_KEY", "")
+
+        # Верификация подписи Discord
+        if public_key:
+            sig = headers.get("x-signature-ed25519", "") or headers.get("X-Signature-Ed25519", "")
+            ts = headers.get("x-signature-timestamp", "") or headers.get("X-Signature-Timestamp", "")
+            if sig and ts:
+                if not verify_discord_signature(public_key, sig, ts, body_str):
+                    return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Invalid signature"})}
+
         try:
-            body = json.loads(event.get("body") or "{}")
+            data = json.loads(body_str)
         except Exception:
-            pass
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Bad JSON"})}
 
-        action = body.get("action", "")
+        interaction_type = data.get("type")
 
-        if action == "start":
-            if _bot_running:
+        # Тип 1 — PING (верификация webhook от Discord)
+        if interaction_type == 1:
+            return {
+                "statusCode": 200,
+                "headers": {**CORS, "Content-Type": "application/json"},
+                "body": json.dumps({"type": 1}),
+            }
+
+        # Тип 2 — APPLICATION_COMMAND (slash команда)
+        if interaction_type == 2:
+            cmd_name = data.get("data", {}).get("name", "")
+
+            if cmd_name == "ку":
                 return {
                     "statusCode": 200,
-                    "headers": CORS,
-                    "body": json.dumps({"ok": True, "status": "already_running"}),
+                    "headers": {**CORS, "Content-Type": "application/json"},
+                    "body": json.dumps({
+                        "type": 4,
+                        "data": {"content": "Привет!"},
+                    }),
                 }
 
-            def run_bot():
-                global _bot_client, _bot_running
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                _bot_client = create_client()
-                _bot_running = True
-                try:
-                    loop.run_until_complete(_bot_client.start(token))
-                except Exception as e:
-                    print(f"Бот остановлен: {e}")
-                finally:
-                    _bot_running = False
-
-            _bot_thread = threading.Thread(target=run_bot, daemon=True)
-            _bot_thread.start()
-
             return {
                 "statusCode": 200,
-                "headers": CORS,
-                "body": json.dumps({"ok": True, "status": "started"}),
+                "headers": {**CORS, "Content-Type": "application/json"},
+                "body": json.dumps({
+                    "type": 4,
+                    "data": {"content": "Неизвестная команда"},
+                }),
             }
 
-        if action == "stop":
-            if _bot_client and _bot_running:
-                import asyncio
-                asyncio.run_coroutine_threadsafe(_bot_client.close(), _bot_client.loop)
-                _bot_running = False
-            return {
-                "statusCode": 200,
-                "headers": CORS,
-                "body": json.dumps({"ok": True, "status": "stopped"}),
-            }
-
-    return {
-        "statusCode": 400,
-        "headers": CORS,
-        "body": json.dumps({"error": "Unknown action"}),
-    }
+    return {"statusCode": 405, "headers": CORS, "body": json.dumps({"error": "Method not allowed"})}
