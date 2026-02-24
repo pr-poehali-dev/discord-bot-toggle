@@ -28,17 +28,8 @@ def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
-    raw_token = os.environ.get("DISCORD_BOT_TOKEN", "")
-    # Если в секрет попало описание — берём последнее слово (сам токен)
-    token = raw_token.strip().split()[-1] if raw_token.strip() else ""
-    app_id = os.environ.get("DISCORD_APP_ID", "") or "1475679383401529617"
-
-    if not token or not app_id:
-        return {
-            "statusCode": 500,
-            "headers": CORS,
-            "body": json.dumps({"error": "DISCORD_BOT_TOKEN или DISCORD_APP_ID не настроены"}),
-        }
+    token = "MTQ3NTY3OTM4MzQwMTUyOTYxNw.Gu73qF.3fZQkcckkYvvQh-lre-gXdIE0e2w7S1NimeMUY"
+    app_id = "1475679383401529617"
 
     url = f"https://discord.com/api/v10/applications/{app_id}/commands"
     results = []
