@@ -23,13 +23,13 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 const COMMANDS_INITIAL = [
-  { command: "!ку", description: "Приветствие", response: "Привет!", enabled: true },
+  { command: "/ku", description: "Приветствие", response: "Привет!", enabled: true },
 ];
 
 const INITIAL_LOGS: LogEntry[] = [
   { id: 1, time: "12:00:01", level: "info", message: "Бот запущен и готов к работе" },
   { id: 2, time: "12:00:02", level: "success", message: "Подключение к Discord API установлено" },
-  { id: 3, time: "12:00:05", level: "info", message: "Команда !ку зарегистрирована" },
+  { id: 3, time: "12:00:05", level: "info", message: "Slash-команда /ku зарегистрирована" },
 ];
 
 export default function Index() {

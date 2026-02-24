@@ -112,7 +112,7 @@ def handler(event: dict, context) -> dict:
             cmd_name = data.get("data", {}).get("name", "")
             print(f"[handler] команда: {cmd_name}")
 
-            if cmd_name == "ку":
+            if cmd_name == "ku":
                 return {
                     "statusCode": 200,
                     "headers": {**CORS, "Content-Type": "application/json"},
