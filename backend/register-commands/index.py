@@ -29,7 +29,7 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
     token = os.environ.get("DISCORD_BOT_TOKEN", "")
-    app_id = os.environ.get("DISCORD_APP_ID", "")
+    app_id = os.environ.get("DISCORD_APP_ID", "") or "1475679383401529617"
 
     if not token or not app_id:
         return {
