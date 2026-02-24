@@ -4,6 +4,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 
 const BOT_API = "https://functions.poehali.dev/a732a48b-2887-4612-a2e4-37497a35d07e";
+const SETTINGS_API = "https://functions.poehali.dev/d8f68ff6-0557-4d53-80c0-55c6ae8278ee";
+const REGISTER_API = "https://functions.poehali.dev/91266527-c06b-488f-9f43-224096af875d";
 
 type Tab = "dashboard" | "status" | "commands" | "logs" | "settings";
 
@@ -41,6 +43,66 @@ export default function Index() {
   const [commands, setCommands] = useState(COMMANDS_INITIAL);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const logIdRef = useRef(INITIAL_LOGS.length + 1);
+
+  // Настройки бота
+  const [botToken, setBotToken] = useState("");
+  const [appId, setAppId] = useState("");
+  const [publicKey, setPublicKey] = useState("");
+  const [savedInfo, setSavedInfo] = useState<{bot_token_set?: boolean; bot_token_preview?: string; app_id?: string; public_key?: string} | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [registerResult, setRegisterResult] = useState<string>("");
+
+  useEffect(() => {
+    fetch(SETTINGS_API)
+      .then(r => r.json())
+      .then(data => setSavedInfo(data))
+      .catch(() => {});
+  }, []);
+
+  const saveSettings = async () => {
+    setSettingsSaving(true);
+    setSettingsSaved(false);
+    const body: Record<string, string> = {};
+    if (botToken.trim()) body.bot_token = botToken.trim();
+    if (appId.trim()) body.app_id = appId.trim();
+    if (publicKey.trim()) body.public_key = publicKey.trim();
+    try {
+      await fetch(SETTINGS_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await fetch(SETTINGS_API).then(r => r.json());
+      setSavedInfo(data);
+      setBotToken(""); setAppId(""); setPublicKey("");
+      setSettingsSaved(true);
+      addLog("success", "Настройки бота сохранены");
+      setTimeout(() => setSettingsSaved(false), 3000);
+    } catch {
+      addLog("error", "Ошибка сохранения настроек");
+    }
+    setSettingsSaving(false);
+  };
+
+  const registerCommands = async () => {
+    setRegistering(true);
+    setRegisterResult("");
+    try {
+      const data = await fetch(REGISTER_API).then(r => r.json());
+      if (data.registered?.[0]?.status === "ok") {
+        setRegisterResult("✓ Команда /ku зарегистрирована!");
+        addLog("success", "Slash-команда /ku зарегистрирована в Discord");
+      } else {
+        setRegisterResult("Ошибка: " + JSON.stringify(data));
+        addLog("error", "Ошибка регистрации команды");
+      }
+    } catch {
+      setRegisterResult("Ошибка подключения");
+    }
+    setRegistering(false);
+  };
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -350,40 +412,102 @@ export default function Index() {
             <div className="animate-fade-in space-y-6">
               <div>
                 <h1 className="text-xl font-semibold">Настройки</h1>
-                <p className="text-sm text-muted-foreground mt-1">Конфигурация бота</p>
+                <p className="text-sm text-muted-foreground mt-1">Подключи своего Discord бота</p>
               </div>
 
-              <div className="border border-border rounded-xl bg-card divide-y divide-border overflow-hidden">
-                {[
-                  { label: "Тёмная тема", desc: "Переключить тему оформления", action: <Switch checked={dark} onCheckedChange={setDark} /> },
-                  { label: "Уведомления", desc: "Логировать все события", action: <Switch defaultChecked /> },
-                  { label: "Авто-перезапуск", desc: "Перезапускать при ошибках", action: <Switch /> },
-                ].map((row) => (
-                  <div key={row.label} className="px-5 py-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{row.label}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{row.desc}</p>
-                    </div>
-                    {row.action}
-                  </div>
-                ))}
-              </div>
-
-              <div className="border border-border rounded-xl bg-card p-5 space-y-3">
-                <p className="text-sm font-medium">Информация о боте</p>
-                <div className="space-y-2">
-                  {[
-                    { label: "Платформа", value: "Discord" },
-                    { label: "Хостинг", value: "Cloud Function" },
-                    { label: "Версия", value: "1.0.0" },
-                    { label: "Команда !ку", value: "«Привет!»" },
-                  ].map((r) => (
-                    <div key={r.label} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{r.label}</span>
-                      <span className="font-medium">{r.value}</span>
-                    </div>
-                  ))}
+              {/* Токен бота */}
+              <div className="border border-border rounded-xl bg-card p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Данные бота</p>
+                  {savedInfo?.bot_token_set && (
+                    <span className="text-xs text-emerald-500 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Токен установлен {savedInfo.bot_token_preview}
+                    </span>
+                  )}
                 </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Bot Token</label>
+                    <input
+                      type="password"
+                      value={botToken}
+                      onChange={e => setBotToken(e.target.value)}
+                      placeholder="MTQ3NT..."
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#5865F2]/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Application ID</label>
+                    <input
+                      type="text"
+                      value={appId}
+                      onChange={e => setAppId(e.target.value)}
+                      placeholder={savedInfo?.app_id || "1475679..."}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#5865F2]/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Public Key</label>
+                    <input
+                      type="text"
+                      value={publicKey}
+                      onChange={e => setPublicKey(e.target.value)}
+                      placeholder={savedInfo?.public_key ? savedInfo.public_key.slice(0, 16) + "..." : "a3f8c2d1..."}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#5865F2]/40"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={saveSettings}
+                  disabled={settingsSaving || (!botToken && !appId && !publicKey)}
+                  className="w-full py-2.5 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-medium transition-all disabled:opacity-50"
+                >
+                  {settingsSaving ? "Сохраняю..." : settingsSaved ? "✓ Сохранено!" : "Сохранить"}
+                </button>
+              </div>
+
+              {/* Регистрация команд */}
+              <div className="border border-border rounded-xl bg-card p-5 space-y-3">
+                <div>
+                  <p className="text-sm font-medium">Регистрация slash-команд</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">После смены бота — нажми чтобы зарегистрировать /ku</p>
+                </div>
+                <button
+                  onClick={registerCommands}
+                  disabled={registering || !savedInfo?.bot_token_set}
+                  className="w-full py-2.5 rounded-lg border border-border hover:bg-accent text-sm font-medium transition-all disabled:opacity-50"
+                >
+                  {registering ? "Регистрирую..." : "Зарегистрировать команды"}
+                </button>
+                {registerResult && (
+                  <p className={`text-xs ${registerResult.startsWith("✓") ? "text-emerald-500" : "text-red-400"}`}>
+                    {registerResult}
+                  </p>
+                )}
+              </div>
+
+              {/* Тема */}
+              <div className="border border-border rounded-xl bg-card divide-y divide-border overflow-hidden">
+                <div className="px-5 py-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Тёмная тема</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Переключить тему оформления</p>
+                  </div>
+                  <Switch checked={dark} onCheckedChange={setDark} />
+                </div>
+              </div>
+
+              {/* Инструкция */}
+              <div className="border border-border rounded-xl bg-card p-5 space-y-2">
+                <p className="text-sm font-medium">Как подключить нового бота</p>
+                <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+                  <li>Создай бота на discord.com/developers/applications</li>
+                  <li>Скопируй Bot Token, Application ID и Public Key</li>
+                  <li>Вставь их выше и нажми «Сохранить»</li>
+                  <li>Укажи Interactions URL: <span className="font-mono text-foreground">functions.poehali.dev/a732a48b...</span></li>
+                  <li>Нажми «Зарегистрировать команды»</li>
+                </ol>
               </div>
             </div>
           )}

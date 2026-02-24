@@ -1,11 +1,12 @@
 """
-Регистрация slash-команд Discord бота. v2
-Вызывается один раз — POST / для регистрации всех команд.
+Регистрация slash-команд Discord бота. v3
+Токен и app_id читаются из БД (bot_settings).
 """
 
 import os
 import json
 import urllib.request
+import psycopg2
 
 CORS = {
     "Access-Control-Allow-Origin": "*",
@@ -22,14 +23,32 @@ COMMANDS = [
 ]
 
 
+def get_settings():
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    cur = conn.cursor()
+    cur.execute("SELECT key, value FROM bot_settings WHERE key IN ('bot_token', 'app_id')")
+    rows = {r[0]: r[1] for r in cur.fetchall()}
+    cur.close()
+    conn.close()
+    return rows
+
+
 def handler(event: dict, context) -> dict:
-    """Регистрирует slash-команды бота в Discord API."""
+    """Регистрирует slash-команды бота в Discord API, используя токен из БД."""
 
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
-    token = "MTQ3NTY3OTM4MzQwMTUyOTYxNw.Gu73qF.3fZQkcckkYvvQh-lre-gXdIE0e2w7S1NimeMUY"
-    app_id = "1475679383401529617"
+    settings = get_settings()
+    token = settings.get("bot_token", "")
+    app_id = settings.get("app_id", "")
+
+    if not token or not app_id:
+        return {
+            "statusCode": 400,
+            "headers": CORS,
+            "body": json.dumps({"error": "Токен или App ID не настроены. Добавь их в Настройках на сайте."}),
+        }
 
     url = f"https://discord.com/api/v10/applications/{app_id}/commands"
     results = []
